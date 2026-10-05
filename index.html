@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Zero Coal Cost Explorer</title>
+<meta name="description" content="Interactive explorer of the costs and savings of a 1.5°C coal phase-out, from Macaire, Grieco, Naef & Volz (2026), Climate Policy.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: citation strip → live net-cost headline → controls rail (left) beside the chart (right); stacks on phones. */
+:root{
+  --bg:#f2f3f5; --panel:#ffffff; --ink:#15181d; --ink-2:#4a505b; --ink-3:#7a808b;
+  --line:#dde0e5; --grid:#e7e9ed; --volt:#c98a00; --volt-soft:#fff3d6;
+  --c-stranded:#404040; --c-build:#92d050; --c-fin:#c00000; --c-save:#bfbfbf;
+  --c-adj:#7f7f7f; --c-store:#92d050; --good:#1f7a55; --bad:#b4442a;
+  --f-display:"Archivo","Arial Narrow",Arial,sans-serif;
+  --f-body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#14171b; --panel:#1c2026; --ink:#eceef1; --ink-2:#b3b8c1; --ink-3:#8a909a;
+  --line:#2d323a; --grid:#262a31; --volt:#f2b62b; --volt-soft:#2e2615;
+  --c-stranded:#404040; --c-build:#92d050; --c-fin:#c00000; --c-save:#bfbfbf;
+  --c-adj:#7f7f7f; --c-store:#92d050; --good:#4cc08e; --bad:#ef8467; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#14171b; --panel:#1c2026; --ink:#eceef1; --ink-2:#b3b8c1; --ink-3:#8a909a;
+  --line:#2d323a; --grid:#262a31; --volt:#f2b62b; --volt-soft:#2e2615;
+  --c-stranded:#404040; --c-build:#92d050; --c-fin:#c00000; --c-save:#bfbfbf;
+  --c-adj:#7f7f7f; --c-store:#92d050; --good:#4cc08e; --bad:#ef8467; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.55}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:20px;padding-block:20px 48px}
+a{color:inherit;text-decoration-color:var(--volt);text-underline-offset:3px}
+a:hover{text-decoration-thickness:2px}
+:focus-visible{outline:2px solid var(--volt);outline-offset:2px}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+/* citation strip */
+.cite-strip{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;font-size:13px;color:var(--ink-2);
+  border-bottom:1px solid var(--line);padding-bottom:12px}
+.cite-strip .journal{font-family:var(--f-display);font-weight:700;font-stretch:80%;letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}
+.cite-strip .doi{margin-left:auto}
+
+/* headline */
+header.hero{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:24px 40px;padding-block:28px 24px;align-items:end}
+.kicker{font-family:var(--f-display);font-stretch:75%;font-weight:600;text-transform:uppercase;letter-spacing:.12em;font-size:13px;color:var(--volt);display:flex;align-items:center;gap:8px}
+.kicker svg{width:14px;height:14px;fill:var(--volt)}
+h1{font-family:var(--f-display);font-weight:800;font-stretch:72%;font-size:clamp(40px,7vw,76px);line-height:.92;margin:8px 0 12px;letter-spacing:-.01em;text-wrap:balance}
+.lede{color:var(--ink-2);max-width:60ch;margin:0}
+.authors{font-size:13px;color:var(--ink-3);margin-top:10px}
+.verdict{border-left:3px solid var(--volt);padding:4px 0 4px 18px}
+.verdict .label{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3)}
+.verdict .big{font-family:var(--f-display);font-weight:800;font-stretch:80%;font-size:clamp(44px,6vw,64px);line-height:1;margin:4px 0 6px;font-variant-numeric:tabular-nums}
+.verdict .big.gain{color:var(--good)}
+.verdict .sub{color:var(--ink-2);font-size:14px;max-width:46ch}
+
+/* main grid */
+.main{display:grid;grid-template-columns:320px minmax(0,1fr);gap:24px;align-items:start}
+.rail{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;display:grid;gap:20px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px)}
+.rail h2{font-family:var(--f-display);font-stretch:80%;font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.08em;margin:0}
+.ctl{display:grid;gap:8px}
+.ctl-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.ctl label,.ctl .lbl{font-weight:600;font-size:14px}
+.ctl .val{font-family:var(--f-mono);font-size:12.5px;color:var(--ink-2);text-align:right}
+.hint{font-size:12.5px;color:var(--ink-3);margin:0;line-height:1.45}
+.tag{display:inline-block;font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:1px 6px;border-radius:4px;vertical-align:1px;margin-left:4px}
+.tag.pub{background:var(--volt-soft);color:var(--ink-2)}
+.tag.approx{border:1px dashed var(--ink-3);color:var(--ink-3)}
+input[type=range]{width:100%;accent-color:var(--volt);margin:0}
+.range-ends{display:flex;justify-content:space-between;font-size:11.5px;color:var(--ink-3)}
+.seg{display:flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg button{flex:1;font:inherit;font-size:13px;padding:7px 6px;border:0;background:transparent;color:var(--ink-2);cursor:pointer;min-width:0}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg);font-weight:600}
+select{font:inherit;font-size:13.5px;width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--ink)}
+.wacc-vals{margin:0;font-size:11.5px;line-height:1.5;color:var(--ink-3)}
+.divider{border:0;border-top:1px solid var(--line);margin:0}
+
+/* chart panel */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 18px 12px;min-width:0}
+.panel-top{display:flex;flex-wrap:wrap;gap:10px 16px;justify-content:space-between;align-items:center;margin-bottom:6px}
+.presets{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font:inherit;font-size:12.5px;padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink-2);cursor:pointer}
+.chip:hover{border-color:var(--ink-3);color:var(--ink)}
+.chip[aria-pressed="true"]{background:var(--volt-soft);border-color:var(--volt);color:var(--ink);font-weight:600}
+.panel h3{font-family:var(--f-display);font-stretch:85%;font-weight:700;font-size:18px;margin:0}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--ink-2);margin:10px 0 4px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:12px;height:12px;border-radius:3px;display:inline-block}
+.sw.dia{width:10px;height:10px;transform:rotate(45deg);border-radius:1px;background:#000;box-shadow:0 0 0 1.5px #fff}
+.sw.ghost{width:10px;height:10px;transform:rotate(45deg);border-radius:1px;border:1.5px solid var(--ink-3)}
+.chart-box{position:relative;width:100%;overflow-x:auto}
+svg#chart{display:block;width:100%;min-width:520px;height:auto}
+svg#chart text{font-family:var(--f-body);fill:var(--ink-2)}
+.tooltip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line);box-shadow:0 6px 24px rgba(0,0,0,.14);border-radius:8px;padding:10px 12px;font-size:12.5px;min-width:230px;z-index:5}
+.tooltip h4{margin:0 0 6px;font-family:var(--f-display);font-stretch:85%;font-size:15px}
+.tooltip table{border-collapse:collapse;width:100%}
+.tooltip td{padding:2px 0;color:var(--ink-2)}
+.tooltip td:last-child{text-align:right;font-family:var(--f-mono);color:var(--ink)}
+.tooltip tr.tot td{border-top:1px solid var(--line);padding-top:5px;font-weight:600;color:var(--ink)}
+
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:18px}
+.kpi{background:var(--panel);padding:12px 14px;min-width:0}
+.kpi .k{font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3)}
+.kpi .v{font-family:var(--f-display);font-stretch:85%;font-weight:700;font-size:26px;line-height:1.15;font-variant-numeric:tabular-nums}
+.kpi .d{font-size:12px;color:var(--ink-3)}
+.toggle-view{display:flex;gap:6px;align-items:center;font-size:12.5px;color:var(--ink-3)}
+
+details.table-view{margin-top:14px}
+details.table-view summary{cursor:pointer;font-size:13px;color:var(--ink-2)}
+.tbl-wrap{overflow-x:auto;margin-top:8px}
+table.data{border-collapse:collapse;width:100%;font-size:13px;min-width:620px}
+table.data th,table.data td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right}
+table.data th:first-child,table.data td:first-child{text-align:left}
+table.data th{font-weight:600;color:var(--ink-2);font-size:12px}
+table.data td{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+table.data td:first-child{font-family:var(--f-body)}
+table.data tr.net td{font-weight:600}
+
+/* notes */
+.notes{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:24px 40px;margin-top:36px;padding-top:24px;border-top:1px solid var(--line)}
+.notes h2{font-family:var(--f-display);font-stretch:80%;font-weight:700;font-size:20px;margin:0 0 10px}
+.notes ul{margin:0;padding-left:18px;color:var(--ink-2);font-size:14px;display:grid;gap:6px}
+.notes p{color:var(--ink-2);font-size:14px;margin:0 0 10px;max-width:65ch}
+.citebox{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;font-size:13px;color:var(--ink-2)}
+.citebox p{font-size:13px}
+.btn{font:inherit;font-size:13px;font-weight:600;padding:7px 12px;border-radius:7px;border:1px solid var(--ink);background:var(--ink);color:var(--bg);cursor:pointer}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+footer{margin-top:28px;font-size:12px;color:var(--ink-3)}
+
+@media (max-width:900px){
+  header.hero{grid-template-columns:1fr}
+  .main{grid-template-columns:1fr}
+  .rail{position:static;order:2}
+  .notes{grid-template-columns:1fr}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:480px){
+  .wrap{padding-inline:16px}
+  .cite-strip .doi{margin-left:0}
+}
+@media (prefers-reduced-motion:no-preference){
+  .verdict .big{transition:color .2s}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="cite-strip">
+    <span class="journal">Climate Policy</span>
+    <span>Research article · published 5 June 2026</span>
+    <a class="doi" href="https://doi.org/10.1080/14693062.2026.2675278" target="_blank" rel="noopener">doi.org/10.1080/14693062.2026.2675278 ↗</a>
+  </div>
+
+  <header class="hero">
+    <div>
+      <div class="kicker"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>High Voltage · interactive companion</div>
+      <h1>What does it cost to exit coal power?</h1>
+      <p class="lede">Retiring 70% of the operating coal fleet now and cancelling every planned plant keeps coal power within the IEA's 1.5&nbsp;°C sectoral budget. Change the assumptions below and watch the bill, and the savings, move.</p>
+      <p class="authors">Camille Macaire · Fabio Grieco · Alain Naef · Ulrich Volz</p>
+    </div>
+    <div class="verdict" aria-live="polite">
+      <div class="label" id="verdictLabel">Global net cost of the phase-out</div>
+      <div class="big num" id="verdictBig">$4.1 tn</div>
+      <div class="sub" id="verdictSub"></div>
+    </div>
+  </header>
+
+  <div class="main">
+    <aside class="rail" aria-label="Assumptions">
+      <h2>Assumptions</h2>
+
+      <div class="ctl">
+        <div class="ctl-head"><label for="carbon">Carbon price path <span class="tag pub">Paper</span></label></div>
+        <input type="range" id="carbon" min="0" max="100" step="5" value="0" aria-describedby="carbonVal">
+        <div class="range-ends"><span>IEA STEPS</span><span>IEA Net Zero</span></div>
+        <div class="val" id="carbonVal" style="text-align:left"></div>
+        <p class="hint">Ends are the paper's two scenarios. In-between positions interpolate linearly, since CO₂ costs scale with the price.</p>
+      </div>
+
+      <hr class="divider">
+
+      <div class="ctl">
+        <label for="mix">Replacement technology <span class="tag pub">Paper</span></label>
+        <select id="mix">
+          <option value="equal">Balanced mix (solar, wind, nuclear)</option>
+          <option value="solar">100% solar</option>
+          <option value="nuclear">100% nuclear</option>
+          <option value="onshore">100% onshore wind</option>
+          <option value="offshore">100% offshore wind</option>
+        </select>
+        <p class="hint">The paper reports build costs by mix. Financing costs are rescaled with the investment here.</p>
+      </div>
+
+      <hr class="divider">
+
+      <div class="ctl">
+        <div class="ctl-head"><span class="lbl" id="storeLbl">Battery storage <span class="tag approx">World only</span></span></div>
+        <div class="seg" role="group" aria-labelledby="storeLbl" id="store">
+          <button type="button" data-v="0" aria-pressed="true">None</button>
+          <button type="button" data-v="600" aria-pressed="false">0.5 MWh/MW</button>
+          <button type="button" data-v="1200" aria-pressed="false">1 MWh/MW</button>
+        </div>
+        <p class="hint">Indicative 4-hour storage at IRENA's $192/kWh: +$0.6–1.2 tn globally. No regional split is estimated.</p>
+      </div>
+
+      <hr class="divider">
+
+      <div class="ctl">
+        <div class="ctl-head"><span class="lbl" id="lifeLbl">Coal plant lifetime <span class="tag pub">Paper</span></span></div>
+        <div class="seg" role="group" aria-labelledby="lifeLbl" id="life">
+          <button type="button" data-v="40" aria-pressed="true">40 yrs</button>
+          <button type="button" data-v="50" aria-pressed="false">50 yrs</button>
+          <button type="button" data-v="60" aria-pressed="false">60 yrs</button>
+        </div>
+        <p class="hint">The paper reports only net totals for this variant, so it appears as a hatched adjustment.</p>
+      </div>
+
+      <hr class="divider">
+
+      <div class="ctl">
+        <div class="ctl-head"><span class="lbl" id="waccLbl">Market cost of capital <span class="tag pub">Paper</span></span></div>
+        <div class="seg" role="group" aria-labelledby="waccLbl" id="wacc">
+          <button type="button" data-v="base" aria-pressed="true">IRENA 2025 WACC</button>
+          <button type="button" data-v="plus2" aria-pressed="false">+2 pp</button>
+        </div>
+        <p class="wacc-vals num" id="waccVals" hidden></p>
+      </div>
+
+      <hr class="divider">
+
+      <div class="ctl">
+        <div class="ctl-head"><label for="conc">Financing costs covered by concessional finance</label><span class="val" id="concVal">0%</span></div>
+        <input type="range" id="conc" min="0" max="100" step="5" value="0">
+        <p class="hint">100% reproduces the paper's 0% cost-of-capital scenario. Intermediate values scale the financing bill proportionally.</p>
+      </div>
+    </aside>
+
+    <section class="panel" aria-labelledby="chartTitle">
+      <div class="panel-top">
+        <h3 id="chartTitle">Total cumulated costs of the 1.5&nbsp;°C coal pathway, $ trillion</h3>
+      </div>
+      <div class="presets" role="group" aria-label="Scenario presets" id="presets">
+        <button class="chip" data-p="baseline" aria-pressed="true">Paper baseline</button>
+      </div>
+      <div class="legend" id="legend"></div>
+      <div class="chart-box" id="chartBox">
+        <svg id="chart" viewBox="0 0 760 440" role="img" aria-labelledby="chartTitle"></svg>
+        <div class="tooltip" id="tip" hidden></div>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi"><div class="k">Gross cost</div><div class="v" id="kGross"></div><div class="d">stranded + build + finance</div></div>
+        <div class="kpi"><div class="k">Operating savings</div><div class="v" id="kSave"></div><div class="d">fuel, CO₂, O&amp;M avoided</div></div>
+        <div class="kpi"><div class="k">Savings cover</div><div class="v" id="kCover"></div><div class="d">of gross cost</div></div>
+        <div class="kpi"><div class="k">Finance share</div><div class="v" id="kFin"></div><div class="d">of gross cost</div></div>
+      </div>
+
+      <details class="table-view">
+        <summary>Show the numbers ($ billion)</summary>
+        <div class="tbl-wrap"><table class="data" id="dataTable"></table></div>
+      </details>
+    </section>
+  </div>
+
+  <section class="notes">
+    <div>
+      <h2>How the explorer computes</h2>
+      <p>Every bar is built from the paper's supplementary tables (Extended Data Tables 1–6). In the baseline, all figures match Figure&nbsp;4 of the article.</p>
+      <ul>
+        <li><b>Stranded assets</b>: unrecovered construction cost of plants retired early (score below 0.626) plus cancelled planned plants. Fixed across scenarios.</li>
+        <li><b>Build costs</b>: overnight cost of low-carbon capacity delivering the same electricity, at 2022 IEA costs and capacity factors.</li>
+        <li><b>Financing costs</b>: interest at IRENA's 2024 solar PV WACC over the remaining coal lifetime, in present value. The +2&nbsp;pp option uses the paper's sensitivity run.</li>
+        <li><b>Operating savings</b>: avoided fuel, CO₂ and O&amp;M costs over the coal plants' remaining lifetime, discounted at the WACC.</li>
+        <li><b>Approximations added by this tool</b>: interpolation between carbon price scenarios; proportional scaling of financing with investment for alternative mixes and for partial concessional cover; lifetime variants added as net adjustments; storage applied to the World total only.</li>
+      </ul>
+      <p style="margin-top:12px">The analysis excludes grid expansion, demand growth, just-transition compensation and health co-benefits. It is a strictly financial view at IEA carbon prices.</p>
+    </div>
+    <div>
+      <h2>Cite the paper</h2>
+      <div class="citebox">
+        <p id="citeText">Macaire, C., Grieco, F., Naef, A., &amp; Volz, U. (2026). High voltage: financing the path to zero coal. <i>Climate Policy</i>. https://doi.org/10.1080/14693062.2026.2675278</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" id="copyCite" type="button">Copy citation</button>
+          <a class="btn ghost" href="https://doi.org/10.1080/14693062.2026.2675278" target="_blank" rel="noopener" style="text-decoration:none">Read the article ↗</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>Data: Global Coal Plant Tracker (2023), IEA World Energy Outlook 2022–2023, IRENA (2025), World Economic Forum Energy Transition Index. The views expressed do not necessarily reflect those of the United Nations, the Banque de France, the European Central Bank or the Eurosystem.</footer>
+</div>
+
+<script>
+(function(){
+  // ---------- Published data, $ billion (Extended Data Tables) ----------
+  const REG = ["World","China","India","US","Europe","Rest of the world"];
+  const T1 = { // stranded, build, finance, opex (STEPS)
+    "World":[842,4812,2837,-4432], "China":[373,2429,1522,-3343], "India":[124,622,498,-212],
+    "US":[82,434,142,-29], "Europe":[64,424,77,-159], "Rest of the world":[199,904,599,-689]};
+  const OPEX_NZE = {"World":-11415,"China":-7800,"India":-1002,"US":-537,"Europe":-390,"Rest of the world":-1685};
+  const MIX = { // Table 3
+    equal:   {"World":4812,"China":2429,"India":622,"US":434,"Europe":424,"Rest of the world":904},
+    solar:   {"World":4703,"China":2730,"India":415,"US":396,"Europe":376,"Rest of the world":786},
+    nuclear: {"World":3873,"China":1726,"India":454,"US":412,"Europe":454,"Rest of the world":827},
+    onshore: {"World":3826,"China":2086,"India":559,"US":216,"Europe":316,"Rest of the world":650},
+    offshore:{"World":8059,"China":4345,"India":1203,"US":717,"Europe":484,"Rest of the world":1310}};
+  const LIFE = { // Table 4, net cost
+    40:{"World":4061,"China":981,"India":1032,"US":629,"Europe":406,"Rest of the world":1014},
+    50:{"World":3990,"China":699,"India":1087,"US":785,"Europe":382,"Rest of the world":1037},
+    60:{"World":3932,"China":501,"India":1116,"US":884,"Europe":376,"Rest of the world":1056}};
+  const WACC = { // Table 5, net cost
+    base: {"World":4061,"China":981,"India":1032,"US":629,"Europe":406,"Rest of the world":1014},
+    plus2:{"World":4535,"China":1326,"India":1059,"US":661,"Europe":417,"Rest of the world":1072}};
+  const SCORE = { // Table 6, net cost
+    paper:  {"World":4061,"China":981,"India":1032,"US":629,"Europe":406,"Rest of the world":1014},
+    equal:  {"World":4111,"China":1000,"India":978,"US":629,"Europe":412,"Rest of the world":1092},
+    tech:   {"World":4138,"China":960,"India":1262,"US":605,"Europe":383,"Rest of the world":927},
+    country:{"World":3575,"China":1487,"India":137,"US":629,"Europe":262,"Rest of the world":1060}};
+
+  const DEFAULT = {carbon:0, wacc:"base", conc:0, mix:"equal", store:0, life:40, score:"paper", scope:"all"};
+  const PRESETS = { baseline:{...DEFAULT} };
+
+  // Baseline WACC by region (IRENA 2024, utility-scale solar PV), in %. Set each to a number to show the gray line.
+  const WACC_BASE = {"Africa":12.0,"Asia":4.0,"Europe":4.2,"North America":5.5,"South America":7.7,"Oceania":3.9};
+  let S = {...DEFAULT};
+
+  function compute(state, r){
+    const [st, b0, f0, o0] = T1[r];
+    const build = MIX[state.mix][r];
+    let fin = f0 + (state.wacc==="plus2" ? (WACC.plus2[r]-WACC.base[r]) : 0);
+    fin = fin * (build / b0) * (1 - state.conc/100);
+    const t = state.carbon/100;
+    const opex = o0 + t*(OPEX_NZE[r]-o0);
+    const adj = (LIFE[state.life][r]-LIFE[40][r]) + (SCORE[state.score][r]-SCORE.paper[r]);
+    const store = r==="World" ? +state.store : 0;
+    const net = st + build + fin + opex + adj + store;
+    return {st, build, fin, opex, adj, store, net};
+  }
+
+  // ---------- formatting ----------
+  const tn = v => (v<0?"−":"")+"$"+(Math.abs(v)/1000).toFixed(1)+" tn";
+  const bn = v => (v<0?"−":"")+Math.round(Math.abs(v)).toLocaleString("en-US");
+  const pct = v => Math.round(v)+"%";
+
+  const SERIES = [
+    {k:"fin",  name:"Financing debt costs (present value)", color:"var(--c-fin)"},
+    {k:"build",name:"Cost to build renewables", color:"var(--c-build)"},
+    {k:"st",   name:"Stranded assets, early decommissioning of operating coal plants", color:"var(--c-stranded)"},
+    {k:"opex", name:"Net avoided costs on fuel, CO2 and O&M (present value)", color:"var(--c-save)"},
+    {k:"store",name:"Battery storage (indicative)",      color:"url(#hatchStore)", sw:"var(--c-store)", hatch:true},
+    {k:"adj",  name:"Lifetime adjustment (net)", color:"url(#hatchAdj)", sw:"var(--c-adj)", hatch:true}
+  ];
+
+  // ---------- chart ----------
+  const svg = document.getElementById("chart");
+  const NS = "http://www.w3.org/2000/svg";
+  const W=760, H=440, M={t:16,r:12,b:44,l:52};
+  const el = (n,a,p)=>{const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e};
+
+  function roundedPath(x,y,w,h,rTop,rBot){
+    rTop=Math.min(rTop,h/2,w/2); rBot=Math.min(rBot,h/2,w/2);
+    return `M${x},${y+rTop} a${rTop},${rTop} 0 0 1 ${rTop},${-rTop} h${w-2*rTop} a${rTop},${rTop} 0 0 1 ${rTop},${rTop}`+
+           ` v${h-rTop-rBot} a${rBot},${rBot} 0 0 1 ${-rBot},${rBot} h${-(w-2*rBot)} a${rBot},${rBot} 0 0 1 ${-rBot},${-rBot} z`;
+  }
+  function niceStep(span){ const raw=span/7; const p=Math.pow(10,Math.floor(Math.log10(raw))); const n=raw/p; return (n<1.5?1:n<3?2.5:n<7?5:10)*p; }
+
+  let lastData=null;
+  function draw(){
+    const regions = S.scope==="all" ? REG : REG.slice(1);
+    const data = regions.map(r=>({r, ...compute(S,r), base: compute(DEFAULT,r).net}));
+    lastData = data;
+    let maxP=0,minN=0;
+    data.forEach(d=>{
+      const pos = d.st+d.build+d.fin+d.store+Math.max(d.adj,0);
+      const neg = d.opex+Math.min(d.adj,0);
+      maxP=Math.max(maxP,pos,d.net,d.base); minN=Math.min(minN,neg,d.net,d.base);
+    });
+    const floorMax = S.scope==="all"?10000:2500, floorMin = S.scope==="all"?-5000:-2500;
+    maxP=Math.max(maxP,floorMax); minN=Math.min(minN,floorMin);
+    const step=niceStep(maxP-minN);
+    const yMax=Math.ceil(maxP/step)*step, yMin=Math.floor(minN/step)*step;
+    const y = v => M.t + (yMax - v)/(yMax-yMin)*(H-M.t-M.b);
+
+    svg.innerHTML="";
+    const defs=el("defs",{},svg);
+    [["hatchAdj","var(--c-adj)"],["hatchStore","var(--c-store)"]].forEach(([id,c])=>{
+      const p=el("pattern",{id,patternUnits:"userSpaceOnUse",width:6,height:6,patternTransform:"rotate(45)"},defs);
+      el("rect",{width:6,height:6,fill:"var(--panel)"},p);
+      el("rect",{width:2.4,height:6,fill:c},p);
+    });
+
+    // grid + axis
+    const g=el("g",{},svg);
+    for(let v=yMin; v<=yMax+1e-6; v+=step){
+      el("line",{x1:M.l,x2:W-M.r,y1:y(v),y2:y(v),stroke:v===0?"var(--ink-3)":"var(--grid)","stroke-width":v===0?1.2:1},g);
+      const t=el("text",{x:M.l-8,y:y(v)+4,"text-anchor":"end","font-size":12},g);
+      t.textContent=(v/1000).toFixed(step<1000?1:(Number.isInteger(v/1000)?0:1));
+    }
+    const yl=el("text",{x:14,y:M.t+(H-M.t-M.b)/2,"text-anchor":"middle","font-size":12,transform:`rotate(-90 14 ${M.t+(H-M.t-M.b)/2})`},g);
+    yl.textContent="$ trillion";
+
+    const plotW=W-M.l-M.r, band=plotW/data.length, bw=Math.min(64,band*0.5);
+    data.forEach((d,i)=>{
+      const cx=M.l+band*(i+0.5), x=cx-bw/2;
+      const grp=el("g",{tabindex:0,role:"img","aria-label":`${d.r}: net cost ${tn(d.net)}`, "data-i":i, style:"cursor:pointer;outline:none"},svg);
+      // hit area
+      el("rect",{x:M.l+band*i,y:M.t,width:band,height:H-M.t-M.b,fill:"transparent",class:"hit"},grp);
+      // positive stack
+      const posSegs=[["st",d.st],["build",d.build],["fin",d.fin],["store",d.store],["adj",Math.max(d.adj,0)]].filter(s=>s[1]>0.5);
+      let acc=0;
+      posSegs.forEach((s,j)=>{
+        const top=y(acc+s[1]), bot=y(acc), gap=j>0?2:0;
+        const h=Math.max(bot-top-gap,0.5);
+        const ser=SERIES.find(z=>z.k===s[0]);
+        const last=j===posSegs.length-1;
+        el("path",{d:roundedPath(x,top,bw,h,last?4:0,0),fill:ser.color},grp);
+        acc+=s[1];
+      });
+      // negative stack
+      const negSegs=[["opex",d.opex],["adj",Math.min(d.adj,0)]].filter(s=>s[1]<-0.5);
+      acc=0;
+      negSegs.forEach((s,j)=>{
+        const top=y(acc)+(j>0?2:0), bot=y(acc+s[1]);
+        const h=Math.max(bot-top,0.5);
+        const ser=SERIES.find(z=>z.k===s[0]);
+        const last=j===negSegs.length-1;
+        el("path",{d:roundedPath(x,top,bw,h,0,last?4:0),fill:ser.color},grp);
+        acc+=s[1];
+      });
+      // baseline ghost marker
+      const changed = Math.abs(d.net-d.base)>5;
+      if(changed){
+        const gy=y(d.base);
+        el("rect",{x:cx-6,y:gy-6,width:12,height:12,transform:`rotate(45 ${cx} ${gy})`,fill:"var(--panel)",stroke:"var(--ink-3)","stroke-width":1.5,"stroke-dasharray":"2 2"},grp);
+      }
+      // net marker
+      const ny=y(d.net);
+      el("rect",{x:cx-7.5,y:ny-7.5,width:15,height:15,transform:`rotate(45 ${cx} ${ny})`,fill:"#000000",stroke:"#ffffff","stroke-width":2},grp);
+      // net label
+      const lbl=el("text",{x:cx+bw/2+4,y:ny+4,"font-size":11.5,"font-weight":600,style:"fill:var(--ink)"},grp);
+      lbl.textContent=(d.net/1000).toFixed(1);
+      if(bw/2+4+28 > band/2) { lbl.setAttribute("x",cx); lbl.setAttribute("y",ny-12); lbl.setAttribute("text-anchor","middle"); }
+      // category label
+      const ct=el("text",{x:cx,y:H-M.b+20,"text-anchor":"middle","font-size":12.5,style:"fill:var(--ink)"},grp);
+      ct.textContent=d.r==="Rest of the world"?"Rest of world":d.r;
+
+      const show=ev=>showTip(i,ev);
+      grp.addEventListener("mousemove",show);
+      grp.addEventListener("mouseleave",hideTip);
+      grp.addEventListener("focus",()=>showTip(i,null));
+      grp.addEventListener("blur",hideTip);
+      grp.addEventListener("click",show);
+    });
+  }
+
+  const tip=document.getElementById("tip"), box=document.getElementById("chartBox");
+  function showTip(i,ev){
+    const d=lastData[i]; if(!d) return;
+    const rows=[["Stranded assets",d.st],["Build low-carbon",d.build],["Financing",d.fin]];
+    if(d.store) rows.push(["Battery storage",d.store]);
+    if(Math.abs(d.adj)>0.5) rows.push(["Lifetime adj.",d.adj]);
+    rows.push(["Operating savings",d.opex]);
+    tip.innerHTML=`<h4>${d.r}</h4><table>${rows.map(r=>`<tr><td>${r[0]}</td><td>${bn(r[1])}</td></tr>`).join("")}
+      <tr class="tot"><td>Net cost ($ bn)</td><td>${bn(d.net)}</td></tr>
+      <tr><td>Paper baseline</td><td>${bn(d.base)}</td></tr></table>`;
+    tip.hidden=false;
+    const bb=box.getBoundingClientRect(), sb=svg.getBoundingClientRect();
+    const scale=sb.width/W, plotW=W-M.l-M.r, band=plotW/lastData.length;
+    let left=(M.l+band*(i+0.5))*scale + (sb.left-bb.left) + box.scrollLeft + 24;
+    const tw=tip.offsetWidth;
+    if(left+tw > box.scrollLeft+bb.width-4) left=(M.l+band*(i+0.5))*scale + (sb.left-bb.left) + box.scrollLeft - tw - 24;
+    let top = ev ? (ev.clientY-bb.top-20) : 30;
+    top=Math.max(4,Math.min(top, bb.height-tip.offsetHeight-4));
+    tip.style.left=Math.max(4,left)+"px"; tip.style.top=top+"px";
+  }
+  function hideTip(){ tip.hidden=true; }
+
+  function legend(){
+    const w=compute(S,"World");
+    const items=SERIES.filter(s=> !(s.k==="store"&&!w.store) && !(s.k==="adj" && REG.every(r=>Math.abs(compute(S,r).adj)<0.5)));
+    document.getElementById("legend").innerHTML=items.map(s=>{
+      const sw = s.hatch ? `<span class="sw" style="background:repeating-linear-gradient(45deg,${s.sw} 0 2px,transparent 2px 5px);border:1px solid ${s.sw}"></span>` : `<span class="sw" style="background:${s.color}"></span>`;
+      return `<span>${sw}${s.name}</span>`;}).join("")+
+      `<span><span class="sw dia"></span>Net cost</span><span><span class="sw ghost"></span>Paper baseline net cost</span>`;
+  }
+
+  function table(){
+    const rows=REG.map(r=>({r,...compute(S,r)}));
+    const head=`<thead><tr><th>Region</th><th>Stranded</th><th>Build</th><th>Financing</th><th>Storage</th><th>Adj.</th><th>Op. savings</th><th>Net cost</th></tr></thead>`;
+    const body=rows.map(d=>`<tr class="${d.r==='World'?'net':''}"><td>${d.r}</td><td>${bn(d.st)}</td><td>${bn(d.build)}</td><td>${bn(d.fin)}</td><td>${bn(d.store)}</td><td>${bn(d.adj)}</td><td>${bn(d.opex)}</td><td>${bn(d.net)}</td></tr>`).join("");
+    document.getElementById("dataTable").innerHTML=head+"<tbody>"+body+"</tbody>";
+  }
+
+  function kpis(){
+    const w=compute(S,"World");
+    const gross=w.st+w.build+w.fin+w.store;
+    document.getElementById("kGross").textContent=tn(gross);
+    document.getElementById("kSave").textContent=tn(-w.opex);
+    document.getElementById("kCover").textContent=pct(-w.opex/gross*100);
+    document.getElementById("kFin").textContent=pct(w.fin/gross*100);
+    const big=document.getElementById("verdictBig"), lab=document.getElementById("verdictLabel"), sub=document.getElementById("verdictSub");
+    if(w.net<0){ lab.textContent="Global net gain from exiting coal"; big.textContent=tn(-w.net).replace("−",""); big.classList.add("gain"); }
+    else { lab.textContent="Global net cost of the phase-out"; big.textContent=tn(w.net); big.classList.remove("gain"); }
+    const base=compute(DEFAULT,"World").net, diff=w.net-base;
+    const ch=compute(S,"China"), chGross=ch.st+ch.build+ch.fin;
+    let s = Math.abs(diff)<5 ? "Paper baseline. " : `${diff<0?"Down":"Up"} ${tn(Math.abs(diff))} from the paper's baseline of ${tn(base)}. `;
+    s += `Operating savings offset ${pct(-w.opex/gross*100)} of gross costs worldwide and ${pct(-ch.opex/chGross*100)} in China.`;
+    sub.textContent=s;
+  }
+
+  function carbonText(){
+    const t=S.carbon/100;
+    const cn=Math.round(28+t*(90-28)), eu=Math.round(120+t*(140-120));
+    document.getElementById("carbonVal").textContent=`2030 CO₂ price · China $${cn}/t · EU $${eu}/t`;
+  }
+
+  // ---------- controls ----------
+  function syncControls(){
+    document.getElementById("carbon").value=S.carbon;
+    document.getElementById("conc").value=S.conc;
+    document.getElementById("concVal").textContent=S.conc+"%";
+    document.getElementById("mix").value=S.mix;
+    [["wacc","wacc"],["store","store"],["life","life"]].forEach(([id,k])=>{
+      document.querySelectorAll(`#${id} button`).forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.v)===String(S[k])));
+    });
+    const match=Object.entries(PRESETS).find(([k,p])=>Object.keys(DEFAULT).every(key=>key==="scope"||String(p[key])===String(S[key])));
+    document.querySelectorAll("#presets .chip").forEach(c=>c.setAttribute("aria-pressed", match && c.dataset.p===match[0] ? "true":"false"));
+  }
+  function waccText(){
+    const el=document.getElementById("waccVals");
+    const ent=Object.entries(WACC_BASE);
+    if(ent.some(([,v])=>v==null)){ el.hidden=true; return; }
+    const add=S.wacc==="plus2"?2:0;
+    el.textContent=ent.map(([r,v])=>`${r} ${(v+add).toFixed(1)}%`).join(" · ");
+    el.hidden=false;
+  }
+  function update(){ syncControls(); waccText(); carbonText(); draw(); legend(); kpis(); table(); hideTip(); }
+
+  document.getElementById("carbon").addEventListener("input",e=>{S.carbon=+e.target.value;update();});
+  document.getElementById("conc").addEventListener("input",e=>{S.conc=+e.target.value;update();});
+  document.getElementById("mix").addEventListener("change",e=>{S.mix=e.target.value;update();});
+  [["wacc",v=>v],["store",v=>+v],["life",v=>+v]].forEach(([id,cast])=>{
+    document.querySelectorAll(`#${id} button`).forEach(b=>b.addEventListener("click",()=>{S[id]=cast(b.dataset.v);update();}));
+  });
+  document.querySelectorAll("#presets .chip").forEach(c=>c.addEventListener("click",()=>{S={...PRESETS[c.dataset.p], scope:S.scope};update();}));
+
+  document.getElementById("copyCite").addEventListener("click",e=>{
+    const txt=document.getElementById("citeText").innerText, btn=e.currentTarget;
+    const done=()=>{btn.textContent="Copied";setTimeout(()=>btn.textContent="Copy citation",1600);};
+    const fallback=()=>{const r=document.createRange();r.selectNodeContents(document.getElementById("citeText"));const s=getSelection();s.removeAllRanges();s.addRange(r);btn.textContent="Selected, press Ctrl+C";};
+    try{ navigator.clipboard.writeText(txt).then(done,fallback);}catch(_){fallback();}
+  });
+  document.addEventListener("click",e=>{ if(!box.contains(e.target)) hideTip(); });
+
+  update();
+})();
+</script>
+</body>
+</html>
